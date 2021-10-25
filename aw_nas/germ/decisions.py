@@ -373,9 +373,10 @@ class Choices(BaseChoices):
         replace=True,
         p=None,
         epoch_callback=None,
+        post_fn=None,
         schedule_cfg=None,
     ):
-        super().__init__(post_fn=None, schedule_cfg=schedule_cfg)
+        super().__init__(post_fn=post_fn, schedule_cfg=schedule_cfg)
         self._choices = choices
         self._size = size  # choose size
         self.replace = replace

@@ -395,6 +395,7 @@ class SearchableConv(germ.SearchableBlock, AnyKernelConv):
     def finalize_rollout(self, rollout):
         with self.rollout_context(rollout, detach=True):
             conv = AnyKernelConv(
+                padding_flag=0,
                 in_channels=self.in_channels,
                 out_channels=self.out_channels,
                 kernel_size=self.kernel_size,

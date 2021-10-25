@@ -54,6 +54,7 @@ class MobileNetV2(germ.SearchableBlock):
         expansion_choices=[2, 3, 4, 6],
         activation="relu",
         stem_stride=2,
+        first_stride=1,
         pretrained_path=None,
         schedule_cfg={},
     ):
@@ -61,6 +62,7 @@ class MobileNetV2(germ.SearchableBlock):
 
         self.num_classes = num_classes
         self.stem_stride = stem_stride
+        self.first_stride = first_stride
         self.strides = strides
 
         self.depth_choices = depth_choices
@@ -102,7 +104,7 @@ class MobileNetV2(germ.SearchableBlock):
             expansion=1,
             C=self.channels[0],
             C_out=prev_channels,
-            stride=1,
+            stride=first_stride,
             kernel_size=3,
             affine=True,
             activation=activation,
@@ -119,12 +121,12 @@ class MobileNetV2(germ.SearchableBlock):
             cur_channels = (
                 germ.Choices(
                     mult_ratio_choices,
-                    epoch_callback=width_choices_cb,
-                    post_mul_fn=divisor_fn,
+                    epoch_callback=width_choices_cb
                 )
                 * self.channels[i + 2]
-            )
-            if stride == 1 and cur_channels.choices == prev_channels.choices:
+            ).apply(divisor_fn)
+            if stride == 1 and isinstance(prev_channels, germ.Choices) and \
+                cur_channels.choices == prev_channels.choices:
                 # accidently, we found the first block in some stage that has the same channels
                 # coincidentlly, then add shortcut to it.
                 cur_channels = prev_channels
@@ -136,8 +138,7 @@ class MobileNetV2(germ.SearchableBlock):
             for j in range(max(depth_choices)):
                 exp_ratio = germ.Choices(
                     expansion_choices,
-                    epoch_callback=exp_choices_cb,
-                    post_mul_fn=divisor_fn,
+                    epoch_callback=exp_choices_cb
                 )
                 kernel_choice = germ.Choices(
                     self.kernel_sizes, epoch_callback=kernel_choices_cb
@@ -155,6 +156,7 @@ class MobileNetV2(germ.SearchableBlock):
                 stage.append(block)
 
                 if i == len(self.strides) - 1:
+                    # last cell has one block only
                     break
 
             self.cells.append(stage)
@@ -217,6 +219,13 @@ class MobileNetV2(germ.SearchableBlock):
             self.conv_final.finalize_rollout(rollout)
         return self
 
+    def get_feature_channel_num(self, p_levels):
+        level_indexes = feature_level_to_stage_index(self.strides, 
+            int(self.stem_stride == 2) + int(self.first_stride == 2))
+        return [
+            self.cells[level_indexes[p]][-1].out_channels for p in p_levels
+        ]
+
 
 class MBV2SuperNet(germ.GermSuperNet):
     NAME = "mbv2"
@@ -237,7 +246,4 @@ class MBV2SuperNet(germ.GermSuperNet):
         return self.extract_features(inputs)
 
     def get_feature_channel_num(self, p_levels):
-        level_indexes = feature_level_to_stage_index(self.backbone.strides, 1)
-        return [
-            self.backbone.cells[level_indexes[p]][-1].out_channels for p in p_levels
-        ]
+        return self.backbone.get_feature_channel_num(p_levels)
