@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch
 
+import mmcv
+
 from aw_nas.objective.base import BaseObjective
 from aw_nas.objective.detection_utils import Metrics
 from aw_nas.utils.torch_utils import accuracy, collect_results_gpu, get_dist_info
@@ -15,6 +17,13 @@ except ImportError as e:
         "Cannot import mmdet_head, detection NAS might not work: {}".format(e)
     )
 
+
+def detach(data):
+    if isinstance(data, mmcv.parallel.DataContainer):
+        data = data.data
+    if isinstance(data, torch.Tensor):
+        data = data.detach()
+    return data
 
 class MMDetectionHeadObjective(BaseObjective):
     NAME = "mmdetection_head"
@@ -112,7 +121,8 @@ class MMDetectionHeadObjective(BaseObjective):
             for box, label in bboxes
         ]
         self.results.extend(results)
-        self.annotations.extend(annotations)
+
+        self.annotations.extend([{k: detach(v) for k, v in ann.items()} for ann in annotations])
         return [0.0]
 
     def get_anchors(self, featmap_sizes, img_metas, device="cpu"):

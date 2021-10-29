@@ -964,15 +964,17 @@ def train(gpus, seed, cfg_file, load_supernet, load, load_state_dict, save_every
               help="the checkpoint to load")
 @click.option("--load-state-dict", type=str,
               help="the checkpoint (state dict) to load")
+@click.option("--load-supernet", type=str,
+              help="the checkpoint of supernet")
 @click.option("--split", "-s", multiple=True, required=True, type=str,
               help="evaluate on these dataset splits")
 @click.option("--gpus", default="0", type=str,
               help="the gpus to run training on, split by single comma")
 @click.option("--seed", default=None, type=int,
               help="the random seed to run training")
-def test(cfg_file, load, load_state_dict, split, gpus, seed): #pylint: disable=redefined-builtin
-    assert (load is None) + (load_state_dict is None) == 1, \
-        "One and only one of `--load` and `--load-state-dict` arguments is required."
+def test(cfg_file, load, load_state_dict, load_supernet, split, gpus, seed): #pylint: disable=redefined-builtin
+    assert (load is None) + (load_state_dict is None) + (load_supernet is None) == 2, \
+        "One and only one of `--load`, `--load-state-dict` and `--load-supernet` arguments is required."
 
     setproctitle.setproctitle("awnas-test config: {}; load: {}; cwd: {}"\
                               .format(cfg_file, load, os.getcwd()))
@@ -998,6 +1000,10 @@ def test(cfg_file, load, load_state_dict, split, gpus, seed): #pylint: disable=r
     with open(cfg_file, "r") as f:
         cfg = yaml.safe_load(f)
 
+    if load_supernet is not None:
+        cfg["final_model_cfg"]["supernet_state_dict"] = load_supernet
+        cfg["final_trainer_cfg"]["calib_bn_setup"] = True
+
     # initialize components
     LOGGER.info("Initializing components.")
     whole_dataset = _init_component(cfg, "dataset")
@@ -1009,7 +1015,7 @@ def test(cfg_file, load, load_state_dict, split, gpus, seed): #pylint: disable=r
                               model=_init_component(
                                   cfg, "final_model",
                                   search_space=search_space,
-                                  device=device) if load_state_dict else None,
+                                  device=device) if load is None else None,
                               device=device,
                               gpus=gpu_list,
                               objective=objective)

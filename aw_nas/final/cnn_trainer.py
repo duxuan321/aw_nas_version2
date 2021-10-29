@@ -151,8 +151,6 @@ class CNNFinalTrainer(FinalTrainer): #pylint: disable=too-many-instance-attribut
         if self.calib_bn_setup:
             self.model = calib_bn(self.model, self.train_queue)
 
-        self.model = torch.load("germ_mbv2_0.35.pt", "cpu").to(self.device)
-
         # optimizer and scheduler is called in `trainer.setup` call
         self.optimizer = None
         self.scheduler = None
