@@ -1,5 +1,6 @@
 import functools
 from typing import List
+from aw_nas.germ.decisions import apply_post_fn
 
 import torch
 import torch.nn.functional as F
@@ -97,24 +98,25 @@ class MobileNetV2(germ.SearchableBlock):
             schedule_choice_callback, schedule=schedule_cfg.get("depth_choices")
         )
 
-        prev_channels = make_divisible(
-            self.channels[1] * max(self.mult_ratio_choices), 8
-        )
-        self.first_block = MobileNetV2Block(
-            expansion=1,
-            C=self.channels[0],
-            C_out=prev_channels,
+        divisor_fn = functools.partial(make_divisible, divisor=8)
+
+        prev_channels = (germ.Choices(
+            mult_ratio_choices,
+            epoch_callback=width_choices_cb
+        ) * self.channels[1]).apply(divisor_fn)
+        
+        self.first_block = germ.SearchableMBV2Block(
+            ctx,
+            self.channels[0],
+            prev_channels,
+            1,
+            3,
             stride=first_stride,
-            kernel_size=3,
-            affine=True,
-            activation=activation,
         )
 
         self.cells = nn.ModuleList([])
         self.depth_decs = germ.DecisionDict()
         self.stage_out_channel_decs = germ.DecisionDict()
-
-        divisor_fn = functools.partial(make_divisible, divisor=8)
 
         for i, stride in enumerate(self.strides):
             stage = nn.ModuleList([])
@@ -151,6 +153,7 @@ class MobileNetV2(germ.SearchableBlock):
                     exp_ratio,
                     kernel_choice,
                     stride=stride if j == 0 else 1,
+                    short_cut=j > 0
                 )
                 prev_channels = cur_channels
                 stage.append(block)
@@ -206,6 +209,7 @@ class MobileNetV2(germ.SearchableBlock):
 
     def finalize_rollout(self, rollout):
         with self.finalize_context(rollout):
+            self.first_block = self.first_block.finalize_rollout(rollout)
             cells = nn.ModuleList()
             for i, cell in enumerate(self.cells):
                 if str(i) in self.depth_decs:

@@ -110,11 +110,23 @@ class WrapperSearchSpace(SearchSpace):
             n_genotype = genotype_from_str(n_genotype_str, self.neck)
         return (b_genotype, n_genotype)
 
+    def on_epoch_start(self, epoch):
+        super().on_epoch_start(epoch)
+        self.backbone.on_epoch_start(epoch)
+        if self.neck is not None:
+            self.neck.on_epoch_start(epoch)
+
+    def on_epoch_end(self, epoch):
+        super().on_epoch_end(epoch)
+        self.backbone.on_epoch_end(epoch)
+        if self.neck is not None:
+            self.neck.on_epoch_end(epoch)
 
 class WrapperRollout(BaseRollout):
     NAME = "wrapper"
     supported_components = [
         ("trainer", "simple"),
+        ("trainer", "non-topological"),
         ("evaluator", "mepa"),
         ("evaluator", "discrete_shared_weights"),
         ("evaluator", "differentiable_shared_weights"),

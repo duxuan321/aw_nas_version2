@@ -45,7 +45,7 @@ class WrapperFinalTrainer(CNNFinalTrainer):  # pylint: disable=too-many-instance
             },
             weight_decay=3e-4,
             no_bias_decay=False,
-            grad_clip=5.0,
+            grad_clip=None,
             auxiliary_head=False,
             auxiliary_weight=0.4,
             add_regularization=False,
@@ -136,6 +136,10 @@ class WrapperFinalTrainer(CNNFinalTrainer):  # pylint: disable=too-many-instance
         model.train()
         self.objective.set_mode("train")
 
+        all_losses = []
+        all_inp = []
+        all_out = []
+        all_labels = []
         for step, (inputs, targets) in enumerate(train_queue):
             cur_step = step + len(train_queue) * (epoch - 1)
             if 0 <= cur_step <= self.warmup_steps:

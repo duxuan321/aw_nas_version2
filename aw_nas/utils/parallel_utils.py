@@ -302,6 +302,7 @@ def parallelize(override_forward=True):
                     DistributedDataParallel(
                         net,
                         (self.device,),
+                        broadcast_buffers=False,
                         find_unused_parameters=True,
                         check_reduction=True,
                     ),

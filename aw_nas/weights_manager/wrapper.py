@@ -137,6 +137,7 @@ class WrapperWeightsManager(BaseWeightsManager, nn.Module):
         self.head = BaseHead.get_class_(head_type)(
             self.device, feature_channel_nums, **(head_cfg or {}))
 
+
         # other configs
         self.max_grad_norm = max_grad_norm
         # the features that need to be passed from backbone to neck

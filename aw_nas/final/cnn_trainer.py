@@ -58,7 +58,7 @@ class CNNFinalTrainer(FinalTrainer): #pylint: disable=too-many-instance-attribut
                      "eta_min": 0.001
                  },
                  weight_decay=3e-4, no_bias_decay=False,
-                 grad_clip=5.0,
+                 grad_clip=None,
                  auxiliary_head=False, auxiliary_weight=0.4,
                  add_regularization=False,
                  save_as_state_dict=False,
@@ -121,7 +121,7 @@ class CNNFinalTrainer(FinalTrainer): #pylint: disable=too-many-instance-attribut
 
         if self.multiprocess:
             sampler = DistributedGroupSampler(_splits["train"], None,
-                    batch_size) if group \
+                    batch_size, seed=0 if seed is None else seed) if group \
                       else DistributedSampler(_splits["train"], shuffle=True)
             test_kwargs["sampler"] = DistributedSampler(_splits["test"],
                     shuffle=False)
@@ -150,6 +150,8 @@ class CNNFinalTrainer(FinalTrainer): #pylint: disable=too-many-instance-attribut
 
         if self.calib_bn_setup:
             self.model = calib_bn(self.model, self.train_queue)
+
+        self.model = torch.load("germ_mbv2_0.35.pt", "cpu").to(self.device)
 
         # optimizer and scheduler is called in `trainer.setup` call
         self.optimizer = None

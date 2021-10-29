@@ -517,7 +517,7 @@ def get_inf_iterator(iterable, callback):
 
 def prepare_data_queues(dataset, queue_cfg_lst, data_type="image", drop_last=False,
                         shuffle=False, shuffle_seed=None, num_workers=2, multiprocess=False,
-                        shuffle_indice_file=None, pin_memory=True):
+                        shuffle_indice_file=None, pin_memory=False):
     """
     Further partition the dataset splits, prepare different data queues.
 
@@ -857,12 +857,14 @@ class DistributedGroupSampler(DistributedSampler):
     def __init__(self,
                  dataset,
                  indices=None,
-                 samples_per_gpu=1):
+                 samples_per_gpu=1,
+                 seed=0):
         super(DistributedGroupSampler, self).__init__(dataset)
         self.dataset = dataset
         self.indices = indices or list(range(len(dataset)))
         self.samples_per_gpu = samples_per_gpu
         self.epoch = 0
+        self.seed = seed
 
         if hasattr(self.dataset, "group_index"):
             self.flag = self.dataset.group_index
@@ -882,7 +884,7 @@ class DistributedGroupSampler(DistributedSampler):
     def __iter__(self):
         # deterministically shuffle based on epoch
         g = torch.Generator()
-        g.manual_seed(self.epoch)
+        g.manual_seed(self.epoch + self.seed)
 
         indices = []
         for i, size in enumerate(self.group_sizes):

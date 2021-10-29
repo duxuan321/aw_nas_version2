@@ -24,7 +24,8 @@ class SearchableContext(object):
     @contextlib.contextmanager
     def begin_searchable(self, supernet):
         yield self
-        supernet.parse_searchable()
+        if supernet.search_space is not None:
+            supernet.parse_searchable()
 
     def __getattr__(self, name):
         dict_ = RegistryMeta.all_classes("searchable_block")

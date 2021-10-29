@@ -5,7 +5,7 @@ from torch.nn import functional as F
 from aw_nas import utils
 from aw_nas.germ.supernet import GermSuperNet
 from aw_nas.germ.decisions import Choices
-from aw_nas.germ.searchable_blocks import SearchableSepConv
+from aw_nas.germ.searchable_blocks import SearchableSepConv, SearchableConvBNBlock
 from aw_nas.germ.germ import finalize_rollout
 
 from aw_nas.weights_manager.necks.base import BaseNeck
@@ -161,9 +161,6 @@ class SearchablePAFPN(BaseNeck, GermSuperNet):
                 )
                 self.lateral_convs.append(l_conv)
                 self.fpn_convs.append(fpn_conv)
-                self.lateral_convs.append(l_conv)
-                self.fpn_convs.append(fpn_conv)
-
 
             extra_levels = pyramid_layers - len(in_channels)
 
@@ -190,18 +187,18 @@ class SearchablePAFPN(BaseNeck, GermSuperNet):
             for i in range(len(in_channels) - 1):
                 kernel = Choices(kernel_sizes)
                 dilation = Choices(dilations)
-                d_conv = SearchableSepConv(
-                   ctx, out_channels, out_channels, kernel, 2, activation
-                )
-                # d_conv = SearchableConvBNBlock(ctx, out_channels, out_channels,
-                #         kernel, 2)
+                # d_conv = SearchableSepConv(
+                #    ctx, out_channels, out_channels, kernel, 2, activation
+                # )
+                d_conv = SearchableConvBNBlock(ctx, out_channels, out_channels,
+                        kernel, 2)
 
                 kernel = Choices(kernel_sizes)
-                pafpn_conv = SearchableSepConv(
-                   ctx, out_channels, out_channels, kernel, 1, activation
-                )
-                # pafpn_conv = SearchableConvBNBlock(ctx, out_channels,
-                #         out_channels, kernel, 1)
+                # pafpn_conv = SearchableSepConv(
+                #    ctx, out_channels, out_channels, kernel, 1, activation
+                # )
+                pafpn_conv = SearchableConvBNBlock(ctx, out_channels,
+                        out_channels, kernel, 1)
 
                 self.downsample_convs.append(d_conv)
                 self.pafpn_convs.append(pafpn_conv)
@@ -220,7 +217,6 @@ class SearchablePAFPN(BaseNeck, GermSuperNet):
             laterals[i - 1] += F.interpolate(
                laterals[i], size=prev_shape, **self.upsample_cfg
             )
-            laterals[i - 1] += self.upsample[i](laterals[i])
 
         # build outputs from original levels
         inter_outs = [fpn_conv(lat)

@@ -248,6 +248,9 @@ class ChannelMaskHandler(MaskHandler):
                 yield
                 return
 
+            if choice == max(self.choices.choices):
+                yield
+                return
             assert hasattr(
                 self.ctx, "rollout"
             ), "context should have rollout attribute."
@@ -271,7 +274,6 @@ class ChannelMaskHandler(MaskHandler):
                     self.ctx.rollout.masks[self.choices.decision_id] = mask_idx
             if mask_idx is not None:
                 assert len(mask_idx) == choice
-
             if isinstance(module, nn.Conv2d):
                 if module.groups > 1 and axis == 1:
                     # the input shape of depthwise is always 1

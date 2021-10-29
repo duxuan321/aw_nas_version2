@@ -6,3 +6,4 @@ from aw_nas.trainer.base import BaseTrainer
 from aw_nas.trainer.simple import SimpleTrainer
 from aw_nas.trainer.async_trainer import AsyncTrainer
 from aw_nas.trainer.meta import MetaTrainer
+from aw_nas.trainer.non_topological import NonTopologicalTrainer

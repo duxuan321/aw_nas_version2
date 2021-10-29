@@ -3,7 +3,7 @@ import numpy as np
 from torch.optim.lr_scheduler import _LRScheduler
 import torch.optim.lr_scheduler
 
-__all__ = ["CosineWithRestarts", "get_scheduler_cls"]
+__all__ = ["WarmupCosineWithRestarts", "CosineWithRestarts", "get_scheduler_cls"]
 
 class WarmupCosineWithRestarts(_LRScheduler):  # pylint: disable=protected-access
 

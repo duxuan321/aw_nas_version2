@@ -848,7 +848,8 @@ def mptrain(seed, cfg_file, load, load_state_dict, save_every, train_dir, quiet)
                               model=model,
                               device=device,
                               gpus=[device],
-                              objective=objective)
+                              objective=objective,
+                              seed=seed)
     # check trainer support for data type
     expect(_data_type in trainer.supported_data_types())
 
@@ -946,7 +947,8 @@ def train(gpus, seed, cfg_file, load_supernet, load, load_state_dict, save_every
                               model=model,
                               device=device,
                               gpus=gpu_list,
-                              objective=objective)
+                              objective=objective,
+                              seed=seed)
     # check trainer support for data type
     expect(_data_type in trainer.supported_data_types())
 

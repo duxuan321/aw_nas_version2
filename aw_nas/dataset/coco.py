@@ -252,7 +252,7 @@ class COCODetection(data.Dataset):
         objs = valid_objs
         num_objs = len(objs)
 
-        res = np.zeros((num_objs, 6))
+        res = np.zeros((num_objs, 6), dtype=np.float32)
 
         # Lookup table to map from COCO category ids to our internal class
         # indices
@@ -332,8 +332,8 @@ class COCODetection(data.Dataset):
             )
             return results
 
-        img = self._to_tensor(img).to(torch.float)
-        boxes = self._to_tensor(boxes).to(torch.float)
+        img = self._to_tensor(img).to(torch.float32)
+        boxes = self._to_tensor(boxes).to(torch.float32)
         labels = self._to_tensor(labels).to(torch.long)
         return img, boxes, labels, height, width, ori_boxes, annIds
 

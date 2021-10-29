@@ -2,6 +2,7 @@
 from collections import abc as collection_abcs
 from collections import OrderedDict
 import random
+from aw_nas.germ.decisions import BaseDecision
 
 from torch import nn
 from torch.nn import functional as F
@@ -464,6 +465,10 @@ class SearchableConvBNBlock(germ.SearchableBlock):
     ):
         super().__init__(ctx)
 
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+
         self.conv = SearchableConv(
             ctx,
             in_channels,
@@ -571,18 +576,24 @@ class SearchableMBV2Block(germ.SearchableBlock):
         kernel_size,
         stride=1,
         activation="relu",
+        short_cut=False,
         **kwargs
     ):
         super().__init__(ctx)
+        self.exp_ratio = exp_ratio
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.inner_channels = (exp_ratio * in_channels).apply(divisor_fn)
+        inner_channels = exp_ratio * in_channels
+        self.inner_channels = inner_channels.apply(divisor_fn) if isinstance(inner_channels, germ.BaseDecision)\
+                                else divisor_fn(inner_channels)
         self.stride = stride
+        self.short_cut = short_cut
 
-        self.inv_bottleneck = SearchableConvBNBlock(
-            ctx, in_channels, self.inner_channels, 1
-        )
+        if self.exp_ratio != 1:
+            self.inv_bottleneck = SearchableConvBNBlock(
+                ctx, in_channels, self.inner_channels, 1
+            )
         self.depth_wise = SearchableConvBNBlock(
             ctx,
             self.inner_channels,
@@ -599,12 +610,16 @@ class SearchableMBV2Block(germ.SearchableBlock):
         self.act2 = ops.get_op(activation)()
 
     def forward(self, inputs):
-        out = self.inv_bottleneck(inputs)
-        out = self.act1(out)
+        if self.exp_ratio == 1:
+            out = inputs
+        else:
+            out = self.inv_bottleneck(inputs)
+            out = self.act1(out)
         out = self.depth_wise(out)
         out = self.act2(out)
         out = self.point_linear(out)
-        if inputs.shape[-1] == out.shape[-1]  and inputs.shape[1] == out.shape[1]:
+        if inputs.shape[-1] == out.shape[-1] and inputs.shape[1] == out.shape[1] \
+                and self.short_cut:
             #and self.in_channels == self.out_channels:
             out += inputs
         return out
