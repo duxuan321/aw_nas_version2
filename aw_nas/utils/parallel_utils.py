@@ -304,7 +304,6 @@ def parallelize(override_forward=True):
                         (self.device,),
                         broadcast_buffers=False,
                         find_unused_parameters=True,
-                        check_reduction=True,
                     ),
                 )
             else:

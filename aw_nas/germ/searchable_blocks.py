@@ -618,7 +618,8 @@ class SearchableMBV2Block(germ.SearchableBlock):
         out = self.depth_wise(out)
         out = self.act2(out)
         out = self.point_linear(out)
-        if inputs.shape[-1] == out.shape[-1] and inputs.shape[1] == out.shape[1] \
+        #if inputs.shape[-1] == out.shape[-1] and inputs.shape[1] == out.shape[1] \
+        if self.stride == 1\
                 and self.short_cut:
             #and self.in_channels == self.out_channels:
             out += inputs

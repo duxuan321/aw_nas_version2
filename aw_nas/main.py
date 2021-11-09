@@ -705,6 +705,11 @@ def derive(cfg_file, load, out_file, n, save_plot, test, steps, gpu, seed, dump_
     # initialize components
     LOGGER.info("Initializing components.")
     search_space, controller = _init_components_from_cfg(cfg, device, controller_only=True)
+    
+    rollout_type = cfg["rollout_type"]
+    weights_manager = _init_component(cfg, "weights_manager",
+                                          search_space=search_space, device=device,
+                                          rollout_type=rollout_type)
 
     # create the directory for saving plots
     if save_plot is not None:

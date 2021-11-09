@@ -8,7 +8,6 @@ from aw_nas.final.base import FinalModel
 from aw_nas.weights_manager.necks.base import BaseNeck
 from aw_nas.weights_manager.wrapper import BaseHead, BaseBackboneWeightsManager
 from aw_nas.rollout.wrapper import WrapperSearchSpace, WrapperRollout
-from aw_nas.utils import RegistryMeta
 
 
 class WrapperFinalModel(FinalModel):
@@ -137,11 +136,10 @@ class WrapperFinalModel(FinalModel):
         features_shape = {f.shape[-1]: i for i, f in enumerate(features)}
         features = [features[i] for i in sorted(features_shape.values())]
         assert len(features) >= max(feature_levels) + 1
-        return [features[level] for level in feature_levels]
+        return [features[level_index[l]] for l in feature_levels]
 
     def forward(self, inputs):
-        features = self.backbone.extract_features(inputs)
-        features = self._pickout_features(features, self.feature_levels)
+        features = self.backbone.extract_features(inputs, self.feature_levels)
         if self.neck is not None:
             features = self.neck(features)
         return self.head(features)

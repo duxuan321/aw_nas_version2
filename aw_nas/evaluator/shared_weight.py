@@ -334,6 +334,7 @@ class SharedweightEvaluator(
         """
         Training meta parameter of the `weights_manager` (shared super network).
         """
+        self.objective.set_mode("train")
         eval_data = next(self.eval_queue)
         eval_data = utils.to_device(eval_data, self.device)
 

@@ -150,8 +150,8 @@ def makedir(path, remove=False, quiet=False):
                 sys.exit(0)
         else:
             shutil.rmtree(path)
-    if not os.path.isdir(path):
-        os.makedirs(path)
+    if not os.path.isdir(path) and os.environ.get("LOCAL_RANK", '0') == '0':
+        os.makedirs(path, exist_ok=True)
     return path
 
 def get_awnas_dir(env, name):
@@ -377,7 +377,8 @@ def _parse_derive_file(input_f):
 
 def _dump(rollout, dump_mode, of):
     if dump_mode == "list":
-        yaml.safe_dump([list(rollout.genotype._asdict().values())], of)
+        #yaml.safe_dump([list(rollout.genotype._asdict().values())], of)
+        yaml.safe_dump([list(rollout.genotype)], of)
     elif dump_mode == "str":
         yaml.safe_dump([str(rollout.genotype)], of)
     else:

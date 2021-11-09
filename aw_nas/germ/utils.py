@@ -537,6 +537,7 @@ class OrdinalChannelMaskHandler(MaskHandler):
 
                     _mask_idx = _set_common_index(module.groups, 1, 1)
                     _mask_idx = _mask_idx.to(ori_weight.device)
+                    self.ctx.rollout.masks[self.choices.decision_id] = _mask_idx
                     new_weight = ori_weight.index_select(axis, _mask_idx)
                     new_bias = ori_bias.index_select(axis, _mask_idx) if ori_bias is not None else None
                     if detach:

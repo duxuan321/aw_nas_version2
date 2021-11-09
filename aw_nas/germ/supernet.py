@@ -236,8 +236,8 @@ class GermWeightsManager(BaseBackboneWeightsManager, nn.Module):
     def forward(self, *args, **kwargs):
         return self.super_net(*args, **kwargs)
 
-    def extract_features(self, inputs, rollout=None):
-        return self.super_net.extract_features_rollout(rollout, inputs)
+    def extract_features(self, inputs, p_levels=None, rollout=None):
+        return self.super_net.extract_features_rollout(rollout, inputs, p_levels)
 
     def get_feature_channel_num(self, feature_levels=None):
         return self.super_net.get_feature_channel_num(feature_levels)

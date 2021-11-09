@@ -180,14 +180,14 @@ class MobileNetV2(germ.SearchableBlock):
                 del state_dict["classifier.bias"]
             self.logger.info(self.load_state_dict(state_dict, strict=False))
 
-    def extract_features_rollout(self, rollout, inputs):
+    def extract_features_rollout(self, rollout, inputs, p_levels=None):
         self.ctx.rollout = rollout
-        return self.extract_features(inputs)
+        return self.extract_features(inputs, p_levels)
 
-    def extract_features(self, inputs):
+    def extract_features(self, inputs, p_levels=None):
         stemed = self.stem(inputs)
         out = self.first_block(stemed)
-        features = [inputs, stemed, out]
+        features = [inputs, out]
         for i, cell in enumerate(self.cells):
             if self.ctx.rollout is not None and str(i) in self.depth_decs:
                 depth = self._get_decision(self.depth_decs[str(i)], self.ctx.rollout)
@@ -197,7 +197,10 @@ class MobileNetV2(germ.SearchableBlock):
                 if j >= depth:
                     break
                 out = block(out)
-            features.append(out)
+            if i == len(self.strides) - 1 or self.strides[i + 1] == 2:
+                features.append(out)
+        if p_levels is not None:
+            features = [features[p] for p in p_levels]
         return features
 
     def forward(self, inputs):
@@ -223,9 +226,13 @@ class MobileNetV2(germ.SearchableBlock):
             self.conv_final.finalize_rollout(rollout)
         return self
 
+    def get_level_indexes(self):
+        level_indexes = feature_level_to_stage_index(self.strides,
+                int(self.stem_stride == 2) + int(self.first_stride == 2))
+        return level_indexes
+
     def get_feature_channel_num(self, p_levels):
-        level_indexes = feature_level_to_stage_index(self.strides, 
-            int(self.stem_stride == 2) + int(self.first_stride == 2))
+        level_indexes = self.get_level_indexes()
         return [
             self.cells[level_indexes[p]][-1].out_channels for p in p_levels
         ]
@@ -242,12 +249,15 @@ class MBV2SuperNet(germ.GermSuperNet):
     def forward(self, inputs):
         return self.backbone(inputs)
 
-    def extract_features(self, inputs):
-        return self.backbone.extract_features(inputs)
+    def extract_features(self, inputs, p_levels):
+        return self.backbone.extract_features(inputs, p_levels)
 
-    def extract_features_rollout(self, rollout, inputs):
+    def extract_features_rollout(self, rollout, inputs, p_levels):
         self.ctx.rollout = rollout
-        return self.extract_features(inputs)
+        return self.extract_features(inputs, p_levels)
+
+    def get_level_indexes(self):
+        return self.backbone.get_level_indexes()
 
     def get_feature_channel_num(self, p_levels):
         return self.backbone.get_feature_channel_num(p_levels)

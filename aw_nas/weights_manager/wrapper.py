@@ -192,8 +192,7 @@ class WrapperWeightsManager(BaseWeightsManager, nn.Module):
 
     def forward(self, inputs, rollout): #pylint: disable=arguments-differ
         b_rollout, n_rollout = self._extract_backbone_and_neck_rollout(rollout)
-        features = self.backbone.extract_features(inputs, b_rollout)
-        features = self._pickout_features(features, self.feature_levels)
+        features = self.backbone.extract_features(inputs, self.feature_levels, b_rollout)
         if self.neck is not None:
             features = self.neck.forward_rollout(n_rollout, features)
         return self.head(features)
