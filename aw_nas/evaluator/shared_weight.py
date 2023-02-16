@@ -14,6 +14,7 @@ from aw_nas import utils
 from aw_nas.evaluator.base import BaseEvaluator
 from aw_nas.utils.exception import expect, ConfigException
 from aw_nas.evaluator.mepa import _patch_dropout_forward
+from icecream import ic
 
 __all__ = ["SharedweightEvaluator", "DiscreteSharedweightEvaluator", "DifferentiableEvaluator"]
 
@@ -307,6 +308,7 @@ class SharedweightEvaluator(
                         **hid_kwargs
                     )
 
+                    import pdb;pdb.set_trace()
                     rollout.set_perfs(
                         OrderedDict(zip(self._all_perf_names, res))
                     )  # res is already flattend

@@ -20,6 +20,7 @@ from aw_nas import utils
 from aw_nas.utils.common_utils import _dump_with_perf, _parse_derive_file
 from aw_nas.trainer.base import BaseTrainer
 from aw_nas.utils.exception import expect, ConfigException
+from icecream import ic
 
 __all__ = ["SimpleTrainer"]
 
@@ -175,6 +176,7 @@ class SimpleTrainer(BaseTrainer):
 
         for i_eva in range(1, steps+1): # mepa stands for meta param
             e_stats = self.evaluator.update_evaluator(self.controller)
+            import pdb;pdb.set_trace()
             eva_stat_meters.update(e_stats)
             print(
                 "\reva step {}/{} ; controller step {}/{}; {}".format(
@@ -266,9 +268,9 @@ class SimpleTrainer(BaseTrainer):
         if self.interleave_controller_every is not None:
             inter_steps = self.controller_steps
             evaluator_steps = self.interleave_controller_every
-            controller_steps = 1
+            controller_steps = 0
         else:
-            inter_steps = 1
+            inter_steps = 0
             evaluator_steps = self.evaluator_steps
             controller_steps = self.controller_steps
 
@@ -276,7 +278,7 @@ class SimpleTrainer(BaseTrainer):
             c_loss_meter = utils.AverageMeter()
             rollout_stat_meters = utils.OrderedStats() # rollout performance stats from evaluator
             c_stat_meters = utils.OrderedStats() # other stats from controller
-            eva_stat_meters = utils.OrderedStats() # other stats from `evaluator.update_evaluator`
+            eva_stat_meters = utils.OrderedStats() # other stats from `evaluator.update-evaluator`
 
             self.epoch = epoch # this is redundant as Component.on_epoch_start also set this
 
@@ -286,6 +288,10 @@ class SimpleTrainer(BaseTrainer):
 
             finished_e_steps = 0
             finished_c_steps = 0
+            ic(inter_steps)
+            ic(controller_steps, self.controller_train_every)
+            ic(evaluator_steps)
+            import pdb;pdb.set_trace()
             for i_inter in range(1, inter_steps+1): # interleave mepa/controller training
                 # meta parameter training
                 if evaluator_steps > 0:
@@ -445,6 +451,7 @@ class SimpleTrainer(BaseTrainer):
             save_dict = {}
             with self._open_derive_out_file(out_file) as (out_f, save_dict):
                 for i_sample, rollout in enumerate(rollouts):
+                    import pdb;pdb.set_trace()
                     if str(rollout.genotype) in save_dict:
                         rollout.perf = save_dict[str(rollout.genotype)]
                         _dump_with_perf(rollout, "str", out_f, index=i_sample)

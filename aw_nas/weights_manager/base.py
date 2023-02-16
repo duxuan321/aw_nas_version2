@@ -13,6 +13,7 @@ from aw_nas import Component, utils
 from aw_nas.utils.common_utils import nullcontext
 from aw_nas.utils.exception import ConfigException, expect
 from aw_nas.utils.torch_utils import _to_device
+from icecream import ic
 
 
 class BaseWeightsManager(Component):
@@ -201,6 +202,7 @@ class CandidateNet(nn.Module):
             _, targets = data
             outputs = self.forward_data(*data, **kwargs)
             loss = criterion(data[0], outputs, targets)
+            ic()
             if eval_criterions:
                 ans = utils.flatten_list(
                     [c(data[0], outputs, targets) for c in eval_criterions])

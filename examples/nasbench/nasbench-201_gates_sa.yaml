@@ -111,11 +111,11 @@ trainer_cfg:
   controller_samples: 200
   derive_samples: 5
   rollout_batch_size: 1
-  evaluator_steps: 0
+  evaluator_steps: null #0
   controller_steps: 1
   controller_train_every: 1
   controller_train_begin: 1
-  interleave_controller_every: null
+  interleave_controller_every: 1 #null
   schedule_cfg: null
 # ---- End Type simple ----
 ## ---- End Component trainer ----

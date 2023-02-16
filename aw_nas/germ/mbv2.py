@@ -9,7 +9,7 @@ from torch import nn
 from aw_nas import germ
 from aw_nas.ops import get_op, MobileNetV2Block
 from aw_nas.utils import make_divisible, feature_level_to_stage_index
-
+from icecream import ic
 
 def schedule_choice_callback(
     choices: germ.Choices, epoch: int, schedule: List[dict]
@@ -104,6 +104,7 @@ class MobileNetV2(germ.SearchableBlock):
             mult_ratio_choices,
             epoch_callback=width_choices_cb
         ) * self.channels[1]).apply(divisor_fn)
+        ic(prev_channels, prev_channels.choices)
         
         self.first_block = germ.SearchableMBV2Block(
             ctx,

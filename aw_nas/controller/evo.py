@@ -11,7 +11,8 @@ import torch
 from aw_nas.common import BaseRollout, genotype_from_str
 from aw_nas.controller.base import BaseController
 from aw_nas.utils.exception import expect, ConfigException
-
+from icecream import ic
+import os
 
 __all__ = ["RandomSampleController", "EvoController", "ParetoEvoController"]
 
@@ -390,7 +391,7 @@ class ParetoEvoController(BaseController):
         # FIXME: This logic is messed up... fix it!!!!!!
         # (FURTHUR) And use a data structure to maintain the pareto front?
         # if len(self.population) > self.init_population_size:
-        #     pareto_frontier = self.find_pareto_opt()
+        #     pareto_frontier = self.find_ pareto_opt()
         #     distances = self._distance_from_pareto(pareto_frontier)
         #     to_eliminate_num = len(self.population) - self.init_population_size
         #     indices = np.argpartition(distances, to_eliminate_num)[:to_eliminate_num]
@@ -419,7 +420,7 @@ class ParetoEvoController(BaseController):
             rollouts.append(new_rollout)
         return rollouts
 
-    def step(self, rollouts, optimizer=None, perf_name="reward"):
+    def step(self, rollouts, optimizer=None, perf_name="reward", use_sum_metric=False):
         """
         Note that `perf_name` argument will be ignored.
         Use `perf_names` in cfg file/`__init__` call to configure.
@@ -427,8 +428,8 @@ class ParetoEvoController(BaseController):
         if not self._start_pareto_sample:
             # save all perfs in the population
             for rollout in rollouts:
-                self.population[rollout.genotype] = np.array([
-                    rollout.get_perf(perf_name) for perf_name in self.perf_names])
+                value = np.array([rollout.get_perf(perf_name) for perf_name in self.perf_names])
+                self.population[rollout.genotype] = value
                 self.gt_population[rollout.genotype] = \
                     self.population[rollout.genotype]
             if len(self.population) >= self.init_population_size:
@@ -441,7 +442,10 @@ class ParetoEvoController(BaseController):
                     rollout.get_perf(perf_name) for perf_name in self.perf_names])
                 self.gt_population[rollout.genotype] = r_perf
                 for p_perf in self.population.values():
-                    if np.all(r_perf < p_perf):
+                    if use_sum_metric:
+                        if sum(r_perf[1:]) < sum(p_perf[1:]) and r_perf[0] < p_perf[0]:
+                            break
+                    elif np.all(r_perf < p_perf):
                         break
                 else:
                     # if no existing is better than this rollout on all perfs, add it to population
@@ -525,12 +529,20 @@ class ParetoEvoController(BaseController):
 
     def load(self, path):
         state = torch.load(path, map_location=torch.device("cpu"))
-        self.epoch = state["epoch"]
-        self.population = {genotype_from_str(k, self.search_space): v
-                           for k, v in state["population"].items()}
-        self.gt_population = {genotype_from_str(k, self.search_space): v
-                              for k, v in state["gt_population"].items()}
-        self._start_pareto_sample = state["_start_pareto_sample"]
+        try:
+            self.epoch = state["epoch"]
+            self.population = {genotype_from_str(k, self.search_space): v
+                            for k, v in state["population"].items()}
+            self.gt_population = {genotype_from_str(k, self.search_space): v
+                                for k, v in state["gt_population"].items()}
+            self._start_pareto_sample = state["_start_pareto_sample"]
+        except:
+            self.epoch = state.epoch
+            self.population = {genotype_from_str(k, self.search_space): v
+                            for k, v in state.population.items()}
+            self.gt_population = {genotype_from_str(k, self.search_space): v
+                                for k, v in state.gt_population.items()}
+            self._start_pareto_sample = state._start_pareto_sample
 
     def __getstate__(self):
         state = super(ParetoEvoController, self).__getstate__()

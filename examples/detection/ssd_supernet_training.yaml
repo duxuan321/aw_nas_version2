@@ -30,7 +30,7 @@ dataset_type: coco
 dataset_cfg:
   load_train_only: false
   random_choose: false
-  random_seed: 123
+  # random_seed: 123
   train_crop_size: 300
   test_crop_size: 300
   image_mean: 0.
@@ -86,7 +86,7 @@ evaluator_cfg:
 
 ## ---- Component weights_manager ----
 # ---- Type supernet ----
-weights_manager_type: det_supernet
+weights_manager_type: wrapper #!det_supernet
 weights_manager_cfg:
   # Schedulable attributes: 
   rollout_type: ofa

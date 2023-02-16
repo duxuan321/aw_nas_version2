@@ -22,7 +22,7 @@ from aw_nas.base import Component
 from aw_nas.common import BaseRollout, SearchSpace
 from aw_nas.utils import expect, ConfigException
 from aw_nas.germ.decisions import BaseDecision, NonleafDecision
-
+from icecream import ic 
 
 class GermSearchSpace(SearchSpace):
     NAME = "germ"

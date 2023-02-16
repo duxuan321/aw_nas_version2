@@ -19,7 +19,7 @@ from aw_nas.utils import DataParallel
 from aw_nas.utils import DistributedDataParallel
 from aw_nas.utils.torch_utils import calib_bn, GroupSampler, DistributedGroupSampler
 from aw_nas.utils.parallel_utils import get_dist_info
-
+from icecream import ic
 
 try:
     from torch.nn import SyncBatchNorm
@@ -147,7 +147,8 @@ class CNNFinalTrainer(FinalTrainer): #pylint: disable=too-many-instance-attribut
         self.valid_queue = torch.utils.data.DataLoader(
             _splits["test"], batch_size=eval_batch_size, pin_memory=False,
             num_workers=workers_per_queue, **test_kwargs)
-
+        # import pdb;pdb.set_trace()
+        ic(_splits["train"])
         if self.calib_bn_setup:
             self.model = calib_bn(self.model, self.train_queue)
 

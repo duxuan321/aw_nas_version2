@@ -4,17 +4,21 @@ Networks that take architectures as inputs.
 
 import abc
 import logging
+from typing import Tuple, List, Dict, Union, Optional
 
 import numpy as np
 import scipy.sparse as sp
 import torch
-from torch import nn
+from torch import nn, Tensor
 import torch.nn.functional as F
 
 from aw_nas import utils
 from aw_nas.utils.exception import expect, ConfigException
 from aw_nas.base import Component
 from aw_nas.utils import DenseGraphConvolution, DenseGraphOpEdgeFlow
+from collections import OrderedDict
+from aw_nas.utils import DenseGraphSimpleOpEdgeFlow
+from icecream import ic
 
 __all__ = ["PointwiseComparator"]
 
@@ -43,6 +47,50 @@ class ArchEmbedder(Component, nn.Module):
     def load(self, path):
         self.load_state_dict(torch.load(path, map_location=torch.device("cpu")))
 
+class NaiveArchEmbedder(ArchEmbedder):
+    NAME = "naive_embedder"
+    def __init__(self, search_space,
+                 total_choice_num=None,
+                 embedding_size=10,
+                 hidden_size=20,
+                 dropout_ratio=0.,
+                 num_layers=1,
+                 schedule_cfg=None):
+        super(NaiveArchEmbedder, self).__init__(schedule_cfg)
+        self.search_space = search_space
+
+        self.embedding_size = embedding_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.emb = nn.Embedding(total_choice_num, self.embedding_size)
+
+        self.rnn = nn.LSTM(input_size=self.embedding_size,
+                           hidden_size=self.hidden_size, 
+                           num_layers=self.num_layers,
+                           batch_first=True, dropout=dropout_ratio) #todo:这一行的两个参数是啥
+
+        # calculate out dim
+        self.out_dim = self.hidden_size
+
+    def embed_and_transform_arch(self, archs):
+        archs = np.array([list(archs[i].values()) for i in range(len(archs))])
+
+        archs = torch.tensor(archs).to(device=self.emb.weight.device)
+        emb = self.emb(archs)
+
+        return torch.reshape(emb, [emb.shape[0], -1, emb.shape[-1]])
+
+    def forward(self, archs):
+        emb = self.embed_and_transform_arch(archs)
+        out, _ = self.rnn(emb)
+        # normalize the output following NAO
+        out = F.normalize(out, 2, dim=-1)
+
+        # average across decisions (time steps)
+        out = torch.mean(out, dim=1)
+        out = F.normalize(out, 2, dim=-1)
+        return out
 
 class LSTMArchEmbedder(ArchEmbedder):
     NAME = "lstm"

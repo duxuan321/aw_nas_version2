@@ -37,6 +37,8 @@ class RegistryMeta(abc.ABCMeta):
         if hasattr(cls, "REGISTRY"):
             # register the class
             table = cls.REGISTRY
+            # if "data" in table:
+            #     import pdb;pdb.set_trace()
             abstract_methods = cls.__abstractmethods__
             if not abstract_methods:
                 entry = namespace.get("NAME", name.lower())

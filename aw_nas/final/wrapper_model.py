@@ -8,7 +8,7 @@ from aw_nas.final.base import FinalModel
 from aw_nas.weights_manager.necks.base import BaseNeck
 from aw_nas.weights_manager.wrapper import BaseHead, BaseBackboneWeightsManager
 from aw_nas.rollout.wrapper import WrapperSearchSpace, WrapperRollout
-
+from icecream import ic
 
 class WrapperFinalModel(FinalModel):
     NAME = "wrapper_final_model"
@@ -94,6 +94,7 @@ class WrapperFinalModel(FinalModel):
         return self
 
     def load_supernet_state_dict(self, supernet_state_dict, strict=True):
+        ic(supernet_state_dict)
         model_state = torch.load(supernet_state_dict, "cpu")
         model_state = model_state.get("weights_manager", model_state)
         self.load_state_dict(model_state, strict=strict)

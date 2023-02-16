@@ -31,6 +31,7 @@ from aw_nas.utils.vis_utils import WrapWriter
 from aw_nas.utils import RegistryMeta
 from aw_nas.utils import logger as _logger
 from aw_nas.utils.exception import expect
+from icecream import ic
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -135,13 +136,14 @@ def _set_gpu(gpu):
         if set_reproducible:
             LOGGER.info("AWNAS_REPRODUCIBLE environment variable set. Disable cudnn.benchmark, "
                         "enable cudnn.deterministic for better reproducibility")
+        ic(gpu)
         torch.cuda.set_device(gpu)
         if set_reproducible:
             cudnn.benchmark = False
             cudnn.deterministic = True
         else:
             cudnn.benchmark = True
-        cudnn.enabled = True
+        cudnn.enabled = False #True
         LOGGER.info('GPU device = %d' % gpu)
     else:
         LOGGER.warning('No GPU available, use CPU!!')
@@ -771,6 +773,8 @@ def derive(cfg_file, load, out_file, n, save_plot, test, steps, gpu, seed, dump_
 @click.argument("cfg_file", required=True, type=str)
 @click.option("--seed", default=None, type=int,
               help="the random seed to run training")
+@click.option("--load-supernet", default=None, type=str,
+              help="the supernet to load")
 @click.option("--load", default=None, type=str,
               help="the checkpoint to load")
 @click.option("--load-state-dict", default=None, type=str,
@@ -780,7 +784,7 @@ def derive(cfg_file, load, out_file, n, save_plot, test, steps, gpu, seed, dump_
 @click.option("--train-dir", default=None, type=str,
               help="the directory to save checkpoints")
 @click.option("--quiet", "-q", is_flag=True, default=False)
-def mptrain(seed, cfg_file, load, load_state_dict, save_every, train_dir, quiet):
+def mptrain(seed, cfg_file, load_supernet, load, load_state_dict, save_every, train_dir, quiet):
     local_rank = int(os.environ["LOCAL_RANK"])
     # set gpu
     _set_gpu(local_rank)
@@ -826,6 +830,9 @@ def mptrain(seed, cfg_file, load, load_state_dict, save_every, train_dir, quiet)
         cfg = yaml.safe_load(f)
 
     cfg["final_trainer_cfg"]["multiprocess"] = True
+
+    if load_supernet is not None:
+        cfg["final_model_cfg"]["supernet_state_dict"] = load_supernet
 
     # initialize components
     LOGGER.info("Initializing components.")
@@ -908,7 +915,7 @@ def train(gpus, seed, cfg_file, load_supernet, load, load_state_dict, save_every
     else:
         _set_gpu(gpu_list[0])
         device = torch.device("cuda:{}".format(gpu_list[0]) if torch.cuda.is_available() else "cpu")
-
+    ic(device)
     # set seed
     if seed is not None:
         LOGGER.info("Setting random seed: %d.", seed)
@@ -999,6 +1006,9 @@ def test(cfg_file, load, load_state_dict, load_supernet, split, gpus, seed): #py
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
+    
+    LOGGER.info("CWD: %s", os.getcwd())
+    LOGGER.info("CMD: %s", " ".join(sys.argv))
 
     # load components config
     LOGGER.info("Loading configuration files.")

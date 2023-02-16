@@ -1,3 +1,4 @@
+import imp
 import os
 import numpy as np
 import torch
@@ -7,7 +8,7 @@ from aw_nas import utils
 from aw_nas.final.cnn_trainer import CNNFinalTrainer #, _warmup_update_lr
 from aw_nas.utils.common_utils import nullcontext
 from aw_nas.utils.exception import expect
-
+from icecream import ic 
 
 def _warmup_update_lr(optimizer, epoch, init_lr, warmup_epochs, warmup_ratio=0.0):
     k = (1 - epoch / warmup_epochs) * (1 - warmup_ratio)

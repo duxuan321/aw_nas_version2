@@ -12,7 +12,8 @@ from aw_nas.dataset import cifar100
 from aw_nas.dataset import svhn
 from aw_nas.dataset import miniimagenet
 from aw_nas.dataset import imagenet_downsample
-
+# from aw_nas.dataset import kitti
+from aw_nas.dataset.pcdet import *
 try:
     from aw_nas.dataset import voc
     from aw_nas.dataset import coco

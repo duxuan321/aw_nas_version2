@@ -11,7 +11,7 @@ from aw_nas.utils import make_divisible, nullcontext
 from aw_nas.utils.common_utils import (_get_channel_mask, _get_feature_mask,
                                        get_sub_kernel)
 from aw_nas.utils.exception import InvalidUseException, expect
-
+from icecream import ic
 divisor_fn = functools.partial(make_divisible, divisor=8)
 
 
@@ -222,10 +222,10 @@ class KernelMaskHandler(MaskHandler):
 class ChannelMaskHandler(MaskHandler):
     def __init__(self, ctx, module, name, choices, extra_attrs=None):
         super().__init__(ctx, module, name, choices, extra_attrs)
-        if isinstance(module, germ.SearchableConv):
+        if isinstance(module, (germ.SearchableConv, germ.Searchable_ConvTranspose2d)):
             assert module.g_choices == 1 or \
                 module.g_choices == module.ci_choices == module.co_choices, \
-                "ChannelMaskHandler support regular conv or depth-wise conv"
+                "ChannelMaskHandler support regular conv, ConvTranspose2d or depth-wise conv"
         elif not isinstance(module, germ.SearchableBN):
             raise NotImplementedError(
                 "ChannelMaskHandler support bn and conv"
@@ -238,6 +238,8 @@ class ChannelMaskHandler(MaskHandler):
             module: bound module
             choice: choice value
             axis: 0 means applying mask on out channels, 1 means applying mask on in channels.
+            注意：对于conv2d和transpose2d都是在axis=1时处理in_channel(此时不动bias)，axis=0时处理out channel和bias
+            但是由于cov.weight.shape=(out, in/groups, k[0], k[1])与transpose2d.weight.shape=(in, out/groups, k[0], k[1]))不同，计算new_weight时需要对transpose2d取反
         """
         assert axis in (0, 1)
 
@@ -266,16 +268,21 @@ class ChannelMaskHandler(MaskHandler):
                         module.weight.data.argsort()[-choice:].detach().numpy()
                     )
                     self.ctx.rollout.masks[self.choices.decision_id] = mask_idx
-                elif isinstance(module, nn.Conv2d) and module.groups > 1 and axis == 1:
+                elif isinstance(module, (nn.Conv2d, nn.ConvTranspose2d)) and module.groups > 1 and axis == 1:
                     # no need to calculate mask idx
                     pass
                 else:
-                    mask_idx = _get_channel_mask(module.weight.data, choice, axis)
+                    if isinstance(module, nn.Conv2d): #conv2d.weight的顺序是out, in，与axis对应
+                        mask_idx = _get_channel_mask(module.weight.data, choice, axis)
+                    elif isinstance(module, nn.ConvTranspose2d): #transpose2d.weight的顺序是in, out，与axis相反
+                        new_axis = int(not axis)
+                        mask_idx = _get_channel_mask(module.weight.data, choice, new_axis)
+
                     self.ctx.rollout.masks[self.choices.decision_id] = mask_idx
             if mask_idx is not None:
                 assert len(mask_idx) == choice
-            if isinstance(module, nn.Conv2d):
-                if module.groups > 1 and axis == 1:
+            if isinstance(module, (nn.Conv2d, nn.ConvTranspose2d)):
+                if module.groups > 1 and axis == 1: #todo:处理transpose2d的情况
                     # the input shape of depthwise is always 1
                     # only change groups number
                     # weight is sliced when axis == 0
@@ -293,7 +300,12 @@ class ChannelMaskHandler(MaskHandler):
                     ori_weight = module.weight
                     ori_bias = module.bias
 
-                    new_weight = ori_weight.index_select(axis, mask_idx.to(ori_weight.device))
+                    if isinstance(module, nn.Conv2d): #conv2d.weight的顺序是out, in，与axis对应
+                        new_weight = ori_weight.index_select(axis, mask_idx.to(ori_weight.device))
+                    elif isinstance(module, nn.ConvTranspose2d): #transpose2d.weight的顺序是in, out，与axis相反
+                        new_axis = int(not axis)
+                        new_weight = ori_weight.index_select(new_axis, mask_idx.to(ori_weight.device))
+
                     if axis == 1:
                         new_bias = ori_bias
                     else:
@@ -319,9 +331,15 @@ class ChannelMaskHandler(MaskHandler):
                     module._parameters["bias"] = ori_bias
 
                     if axis == 0:
-                        module.out_channels = ori_weight.shape[0]
+                        if isinstance(module, nn.Conv2d):
+                            module.out_channels = ori_weight.shape[0]
+                        elif isinstance(module, nn.ConvTranspose2d):
+                            module.out_channels = ori_weight.shape[1]
                     elif axis == 1:
-                        module.in_channels = ori_weight.shape[1]
+                        if isinstance(module, nn.Conv2d):
+                            module.in_channels = ori_weight.shape[1]
+                        elif isinstance(module, nn.ConvTranspose2d):
+                            module.in_channels = ori_weight.shape[0]
 
             elif isinstance(module, nn.BatchNorm2d):
                 ori = dict()
@@ -486,7 +504,7 @@ def _set_common_index(groups_num, step, select_num):
 class OrdinalChannelMaskHandler(MaskHandler):
     def __init__(self, ctx, module, name, choices, extra_attrs=None):
         super().__init__(ctx, module, name, choices, extra_attrs)
-        assert isinstance(module, (germ.SearchableConv, germ.SearchableBN)), \
+        assert isinstance(module, (germ.SearchableConv, germ.Searchable_ConvTranspose2d, germ.SearchableBN)), \
             "OrdinalChannelMaskHandler support for only searchable conv and bn"
         if isinstance(module, germ.SearchableConv):
             self.depth_wise_flag = check_depth_wise(module)
@@ -516,6 +534,7 @@ class OrdinalChannelMaskHandler(MaskHandler):
             ), "context should have rollout attribute."
 
             # check for depth wise flag
+            # todo: 这部分需要改吗
             if isinstance(module, germ.SearchableConv) and self.depth_wise_flag:
                 # for depth wise in channels
                 if axis == 1:
@@ -575,7 +594,7 @@ class OrdinalChannelMaskHandler(MaskHandler):
             if mask_idx is not None:
                 assert len(mask_idx) == choice
 
-            if isinstance(module, nn.Conv2d):
+            if isinstance(module, (nn.Conv2d, nn.ConvTranspose2d)):
                 assert (
                     module.in_channels % module.groups == 0 and \
                     module.out_channels % module.groups == 0 and \
@@ -591,7 +610,12 @@ class OrdinalChannelMaskHandler(MaskHandler):
 
                     _mask_idx = torch.LongTensor(list(range(choice // module.groups)))
                     _mask_idx = _mask_idx.to(ori_weight.device)
-                    new_weight = ori_weight.index_select(axis, _mask_idx)
+                    if isinstance(module, nn.Conv2d): #conv2d.weight的顺序是out, in，与axis对应
+                        new_weight = ori_weight.index_select(axis, _mask_idx)
+                    elif isinstance(module, nn.ConvTranspose2d): #transpose2d.weight的顺序是in, out，与axis相反
+                        new_axis = int(not axis)
+                        new_weight = ori_weight.index_select(new_axis, _mask_idx)
+
                     if detach:
                         new_weight = nn.Parameter(new_weight)
                     module._parameters["weight"] = new_weight
@@ -610,8 +634,13 @@ class OrdinalChannelMaskHandler(MaskHandler):
                     module.out_channels = choice
 
                     _mask_idx = mask_idx.to(ori_weight.device)
-                    new_weight = ori_weight.index_select(axis, _mask_idx)
-                    new_bias = ori_bias.index_select(axis, _mask_idx) if ori_bias is not None else None
+                    if isinstance(module, nn.Conv2d): #conv2d.weight的顺序是out, in，与axis对应
+                        new_weight = ori_weight.index_select(axis, _mask_idx)
+                    elif isinstance(module, nn.ConvTranspose2d): #transpose2d.weight的顺序是in, out，与axis相反
+                        new_axis = int(not axis)
+                        new_weight = ori_weight.index_select(new_axis, _mask_idx)
+
+                    new_bias = ori_bias.index_select(axis, _mask_idx) if ori_bias is not None else None #todo:这里的axis怎么设置
                     if detach:
                         new_weight = nn.Parameter(new_weight)
                         if new_bias is not None:

@@ -11,7 +11,7 @@ from aw_nas import ops, germ
 from aw_nas.utils import nullcontext
 from .utils import *
 from aw_nas.utils.common_utils import _get_channel_mask, _get_feature_mask
-
+from icecream import ic
 
 class GermOpOnEdge(germ.SearchableBlock):
     """
@@ -298,6 +298,102 @@ class AnyKernelConv(nn.Conv2d):
                 outputs = outputs[:, :, 1:, 1:]
         return outputs
 
+
+class Searchable_ConvTranspose2d(germ.SearchableBlock, nn.ConvTranspose2d):
+    NAME = "conv_transpose"
+
+    def __init__(
+        self,
+        ctx,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        bias=False,
+        groups=1,
+        force_use_ordinal_channel_handler=False,
+        **kwargs
+    ):
+        super().__init__(ctx)
+
+        self.ci_choices = in_channels
+        self.co_choices = out_channels
+        self.g_choices = groups
+        self.force_use_ordinal_channel_handler = force_use_ordinal_channel_handler
+
+        if groups == 1 or out_channels == in_channels == groups:
+            # regular conv or depthwise conv
+            # in case for breaking other code
+            if isinstance(groups, germ.BaseDecision):
+                groups = groups.range()[1]
+
+            if not self.force_use_ordinal_channel_handler:
+                self.ci_handler = ChannelMaskHandler(ctx, self, "in_channels", in_channels)
+                self.co_handler = ChannelMaskHandler(ctx, self, "out_channels", out_channels)
+            else:
+                self.ci_handler = OrdinalChannelMaskHandler(ctx, self, "in_channels", in_channels)
+                self.co_handler = OrdinalChannelMaskHandler(ctx, self, "out_channels", out_channels)
+
+        else:
+            # group share weight conv
+            if isinstance(groups, germ.BaseDecision):
+                groups = gcd(*groups.choices)
+
+            self.ci_handler = OrdinalChannelMaskHandler(ctx, self, "in_channels", in_channels)
+            self.co_handler = OrdinalChannelMaskHandler(ctx, self, "out_channels", out_channels)
+
+        _modules = self._modules
+        _parameters = self._parameters
+        _buffers = self._buffers
+        nn.ConvTranspose2d.__init__(
+            self,
+            in_channels=self.ci_handler.max,
+            out_channels=self.co_handler.max,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding, #?暂时不搜索stride、kernel和padding
+            bias=bias,
+            groups=groups,
+            **kwargs
+        )
+        self._modules.update(_modules)
+        self._parameters.update(_parameters)
+        self._buffers.update(_buffers)
+
+    def rollout_context(self, rollout=None, detach=False):
+        if rollout is None:
+            return nullcontext()
+        # out channels
+        r_o_c = self._get_decision(self.co_handler.choices, rollout)
+        r_i_c = self._get_decision(self.ci_handler.choices, rollout)
+
+        ctx = self.co_handler.apply(self, r_o_c, axis=0, ctx=None, detach=detach)
+        ctx = self.ci_handler.apply(self, r_i_c, axis=1, ctx=ctx, detach=detach)
+        return ctx
+
+    def forward(self, inputs):
+        with self.rollout_context(self.ctx.rollout):
+            out = super().forward(inputs)
+        return out
+
+    def finalize_rollout(self, rollout):
+        with self.rollout_context(rollout, detach=True):
+            conv = nn.ConvTranspose2d(
+                in_channels=self.in_channels,
+                out_channels=self.out_channels,
+                kernel_size=self.kernel_size,
+                stride=self.stride,
+                padding=self.padding,
+                bias=self.bias is not None,
+                groups=self.groups,
+                dilation=self.dilation,
+            )
+            conv.weight.data.copy_(self.weight.data)
+            if self.bias is not None:
+                conv.bias.data.copy_(self.bias.data)
+        return conv
+
 class SearchableConv(germ.SearchableBlock, AnyKernelConv):
     NAME = "conv"
 
@@ -395,8 +491,18 @@ class SearchableConv(germ.SearchableBlock, AnyKernelConv):
 
     def finalize_rollout(self, rollout):
         with self.rollout_context(rollout, detach=True):
-            conv = AnyKernelConv(
-                padding_flag=0,
+            # conv = AnyKernelConv(
+            #     padding_flag=0,
+            #     in_channels=self.in_channels,
+            #     out_channels=self.out_channels,
+            #     kernel_size=self.kernel_size,
+            #     stride=self.stride,
+            #     padding=self.padding,
+            #     bias=self.bias is not None,
+            #     groups=self.groups,
+            #     dilation=self.dilation,
+            # )
+            conv = nn.Conv2d(
                 in_channels=self.in_channels,
                 out_channels=self.out_channels,
                 kernel_size=self.kernel_size,

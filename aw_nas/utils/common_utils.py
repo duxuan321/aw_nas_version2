@@ -27,7 +27,7 @@ from aw_nas.utils.registry import RegistryMeta
 from aw_nas.utils.exception import expect, ConfigException
 from aw_nas.utils.log import getLogger
 
-_HOME_DIR = os.path.abspath(os.path.expanduser(os.environ.get("AWNAS_HOME", "~/awnas")))
+_HOME_DIR = os.path.abspath(os.path.expanduser(os.environ.get("AWNAS_HOME", "/home/duxuan/awnas")))
 
 class Context(object):
     def __init__(self, num_init_nodes, num_layers, use_stem=True,

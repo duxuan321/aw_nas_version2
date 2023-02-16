@@ -38,9 +38,12 @@ class OFAClassificationObjective(BaseObjective):
         """
         Get top-1 acc.
         """
-        if hasattr(cand_net.super_net, "total_flops"):
-            flops = cand_net.super_net.total_flops
-            cand_net.super_net.reset_flops()
+        #! if hasattr(cand_net.super_net, "total_flops"):
+        #     flops = cand_net.super_net.total_flops
+        #     cand_net.super_net.reset_flops()
+        if hasattr(cand_net, "total_flops"):
+            flops = cand_net.total_flops
+            cand_net.total_flops = 0
         else:
             flops = 0
         return float(accuracy(outputs, targets)[0]) / 100, -flops 

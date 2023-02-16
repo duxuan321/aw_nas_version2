@@ -48,7 +48,8 @@ class OFAController(BaseController):
         pass
 
     def step(self, rollouts, optimizer, perf_name):
-        pass
+        return 0
+        # pass
 
     def summary(self, *args, **kwargs):
         pass

@@ -67,12 +67,12 @@ evaluator_cfg:
   mepa_samples: 1
   data_portion:
   - 0.0
-  - 1.0 # train evaluator weights
-  - 0.0 # for train controller
+  - 0.9 # train evaluator weights
+  - 0.1 # for train controller
   mepa_as_surrogate: false
   bptt_steps: 35
   schedule_cfg: null
-  multiprocess: false
+  # multiprocess: false
 # ---- End Type mepa ----
 ## ---- End Component evaluator ----
 
@@ -93,7 +93,7 @@ weights_manager_cfg:
     num_classes: 100
     block_type: mbv3_block
     stem_stride: 1
-  multiprocess: false
+  # multiprocess: false
 # ---- End Type supernet ----
 ## ---- End Component weights_manager ----
 
@@ -106,10 +106,10 @@ objective_cfg:
       boundary: [1, 60]
       value: [0.0, 6.0]
   soft_loss_coeff: 0.0
-  latency_coeff: 1.0
-  expect_latency: 20
-  reward: mult
-  punishment: hard
+  # latency_coeff: 1.0
+  # expect_latency: 20
+  # reward: mult
+  # punishment: hard
 #   latency_file: latency_block.txt
 
 ## ---- Component trainer ----
@@ -118,16 +118,26 @@ trainer_type: simple
 trainer_cfg:
   # Schedulable attributes: controller_samples, derive_samples
   rollout_type: ofa
-  epochs: 500
+  # epochs: 500
   test_every: 10
   controller_scheduler: null
   controller_samples: 1
   derive_samples: 8
-  evaluator_steps: null
-  controller_steps: 0
+  # evaluator_steps: null
+  # controller_steps: 0
   controller_train_every: 1
-  controller_train_begin: 1001
+  # controller_train_begin: 1001
   interleave_controller_every: null
   schedule_cfg: null
+
+  # epochs: 500
+  # evaluator_steps: null
+  # controller_steps: 0
+  # controller_train_begin: 1001
+
+  epochs: 100
+  evaluator_steps: 0
+  controller_steps: 1
+  controller_train_begin: 0 #1001
 # ---- End Type simple ----
 ## ---- End Component trainer ----

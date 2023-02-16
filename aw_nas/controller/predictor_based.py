@@ -14,6 +14,8 @@ from aw_nas.common import BaseRollout
 from aw_nas.utils.exception import expect, ConfigException
 from aw_nas.controller.base import BaseController
 from aw_nas.evaluator.arch_network import ArchNetwork
+from collections import defaultdict, OrderedDict
+from icecream import ic
 
 class ArchDataset(Dataset):
     def __init__(self, data):
@@ -141,7 +143,7 @@ class PredictorBasedController(BaseController):
         if inner_enumerate_search_space:
             warnings.warn("The `inner_enumerate_search_space` option is DEPRECATED. "
                           "Use inner_controller, and set `inner_samples`, `inner_steps` "
-                          "accordingly", warnings.DeprecationWarning)
+                          "accordingly")
         self.inner_enumerate_sample_ratio = inner_enumerate_sample_ratio
         self.min_inner_sample_ratio = min_inner_sample_ratio
         self.predict_batch_size = predict_batch_size
@@ -190,7 +192,7 @@ class PredictorBasedController(BaseController):
         cur_ind = 0
         while cur_ind < num_r:
             end_ind = min(num_r, cur_ind + self.predict_batch_size)
-            padded_archs = self._pad_archs([r.arch for r in rollouts[cur_ind:end_ind]])
+            padded_archs = self._pad_archs([r.arch_for_pred for r in rollouts[cur_ind:end_ind]])
             scores = self.model.predict(padded_archs).cpu().data.numpy()
             for r, score in zip(rollouts[cur_ind:end_ind], scores):
                 r.set_perf(score, name="predicted_score")
@@ -213,7 +215,7 @@ class PredictorBasedController(BaseController):
             self.inner_controller.set_device(device)
         self.device = device
 
-    def sample(self, n=1, batch_size=1):
+    def sample(self, n=1, batch_size=1, **kwargs):
         """Sample architectures based on the current predictor"""
 
         if self.mode == "eval":
@@ -221,6 +223,7 @@ class PredictorBasedController(BaseController):
             self.logger.info("Return the best {} rollouts in the population".format(n))
             all_gt_arch_scores= sum(self.gt_arch_scores, [])
             all_rollouts = sum(self.gt_rollouts, [])
+            ic(len(all_gt_arch_scores))
             best_inds = np.argpartition([item[1] for item in all_gt_arch_scores], -n)[-n:]
             # all_rollouts, all_scores = zip(
             #     *[(r, r.get_perf("reward")) for rs in self.gt_rollouts for r in rs])
@@ -282,6 +285,7 @@ class PredictorBasedController(BaseController):
             self.search_space, self.device, mode=self.mode,
             rollout_type=self.rollout_type, **self.inner_controller_cfg)
         if hasattr(self.inner_controller, "set_init_population"):
+            self.inner_controller.mutate_kwargs = {"mutate_num": 2} # 随机选择mutate_num个位置进行突变
             self.logger.info("re-evaluating %d rollouts using the current predictor",
                              self.num_gt_rollouts)
             # set the init population of the inner controller
@@ -328,26 +332,9 @@ class PredictorBasedController(BaseController):
             iter_s_set = []
             sampled_r_set = sampled_rollouts
             for i_inner in range(1, self.inner_steps+1):
-                # self.inner_controller.on_epoch_begin(i_inner)
-                # while 1:
-                #     rollouts = self.inner_controller.sample(self.inner_samples)
-                #     # remove the duplicate rollouts
-                #     # *fixme* FIXME: local minimum problem exists!
-                #     # random sample is one way, or do not use the best as the init?
-                #     # Add a test to test the whole dataset...
-                #     # grond-truth evaled, decided rollouts
-                #     # rollouts = [r for r in rollouts
-                #     #             if r not in already_evaled_r_set \
-                #     #             and r not in sampled_r_set]
-                #     # and r not in iter_r_set
-
-                #     if not rollouts:
-                #         print("all conflict, resample")
-                #         continue
-                #     else:
-                #         # print("sampled {}".format(i_inner))
-                #         break
                 rollouts = self.inner_controller.sample(self.inner_samples)
+                if len(kwargs) > 0:
+                    rollouts = self.get_arch_ind(rollouts, **kwargs)
                 rollouts = self._predict_rollouts(rollouts)
                 self.inner_controller.step(rollouts, self.inner_cont_optimizer,
                                            perf_name="predicted_score")
@@ -355,10 +342,10 @@ class PredictorBasedController(BaseController):
                 # keep the `num_to_sample` archs with highest scores
                 step_scores = [r.get_perf(name="predicted_score") for r in rollouts]
                 new_rollouts = [r for r in rollouts
-                                if r not in already_evaled_r_set \
-                                and r not in sampled_r_set
-                                and r not in iter_r_set]
-                new_step_scores = [r.get_perf(name="predicted_score") for r in new_rollouts]
+                                if r.arch not in [already_evaled_r_set[i].arch for i in range(len(already_evaled_r_set))] \
+                                and r.arch not in [sampled_r_set[i].arch for i in range(len(sampled_r_set))]
+                                and r.arch not in [iter_r_set[i].arch for i in range(len(iter_r_set))]]
+                new_step_scores = [r.get_perf(name="predicted_score") for r in new_rollouts if len(new_rollouts)]
                 new_per_step_meter.update(len(new_rollouts))
                 best_rollouts += new_rollouts
                 best_scores += new_step_scores
@@ -397,14 +384,42 @@ class PredictorBasedController(BaseController):
 
         return sampled_rollouts
 
-    def step(self, rollouts, optimizer, perf_name):
+    def get_arch_ind(self, rollouts, **kwargs):
+        for i, roll in enumerate(rollouts):
+            # -------------------------------- 计算实际的out channel数值 ------------------------------------
+            setattr(roll, "arch_for_pred", OrderedDict())
+            if "BEVBackbone" in kwargs["model_type"]:
+                curr_ratio_choices = np.array(list(roll.arch.values())[:-3].copy())
+                if kwargs["fix_channel"]:
+                    out_channel = kwargs["num_filters"] * curr_ratio_choices
+                    indices_mapping = kwargs["num_filters"].reshape(-1,1) * kwargs["multi_ratio_choice"].reshape(1,-1)
+                else:
+                    origin_channel = np.array(sum([(kwargs["layer_nums"][i] + 1) * [kwargs["num_filters"][i]] for i in range(len(kwargs["layer_nums"]))], []))
+                    out_channel = origin_channel * curr_ratio_choices
+                    indices_mapping = origin_channel.reshape(-1,1) * np.array(kwargs["multi_ratio_choice"]).reshape(1,-1)
+            elif "MVLidarNet" in kwargs["model_type"]:
+                curr_ratio_choices = np.array(list(roll.arch.values()).copy())
+                out_channel = kwargs["num_filters"] * curr_ratio_choices
+                indices_mapping = kwargs["num_filters"].reshape(-1,1) * kwargs["multi_ratio_choice"].reshape(1,-1)
+                
+            ind = [np.where(indices_mapping[i] == out_channel[i])[0][0] for i in range(len(out_channel))]
+            for i, (key,val) in enumerate(roll.arch.items()):
+                roll.arch_for_pred[key] = ind[i]
+                if i == len(ind) - 1:
+                    break
+        return rollouts
+
+    def step(self, rollouts, optimizer, perf_name, **kwargs):
         """Train the predictor, using the ground-truth evaluations"""
+        if len(kwargs) > 0:
+            rollouts = self.get_arch_ind(rollouts, **kwargs)
         self.gt_rollouts.append(rollouts)
         if perf_name != "reward":
             # set an attribute to each rollout
             [setattr(r, "gt_perf_name", perf_name) for r in rollouts]
 
-        new_archs, new_perfs = zip(*[(r.arch, r.get_perf(perf_name)) for r in rollouts])
+        # new_archs, new_perfs = zip(*[(r.arch, r.get_perf(perf_name)) for r in rollouts])
+        new_archs, new_perfs = zip(*[(r.arch_for_pred, r.get_perf(perf_name)) for r in rollouts])
         self.gt_arch_scores.append(list(zip(self._pad_archs(new_archs), new_perfs)))
 
         self.num_gt_rollouts += len(rollouts)
@@ -457,7 +472,6 @@ class PredictorBasedController(BaseController):
         loss, corr, val_corr = train_predictor(
             self.logger, train_loader, val_loader, self.model,
             self.predictor_train_cfg["epochs"], self.predictor_train_cfg)
-
         self.is_predictor_trained = True
         return loss
 
@@ -483,7 +497,9 @@ class PredictorBasedController(BaseController):
                 self.gt_rollouts = pickle.load(f)
             for rollouts in self.gt_rollouts:
                 # save the perf_name instead of the gt_arch_scores
-                archs, perfs = zip(*[(r.arch, r.get_perf(getattr(r, "gt_perf_name", "reward")))
+                # archs, perfs = zip(*[(r.arch, r.get_perf(getattr(r, "gt_perf_name", "reward")))
+                #                      for r in rollouts])
+                archs, perfs = zip(*[(r.arch_for_pred, r.get_perf(getattr(r, "gt_perf_name", "reward")))
                                      for r in rollouts])
                 self.gt_arch_scores.append(list(zip(self._pad_archs(archs), perfs)))
             self.num_gt_rollouts = sum([len(rollouts) for rollouts in self.gt_rollouts])
